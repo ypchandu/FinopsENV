@@ -158,3 +158,7 @@ def mcp(payload: dict) -> dict:
         "id": payload.get("id"),
         "result": {}
     }
+
+def start():
+    import uvicorn
+    uvicorn.run("app:app", host="0.0.0.0", port=7860)
