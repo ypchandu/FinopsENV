@@ -110,5 +110,5 @@ python inference.py hard
 ```
 
 ## 📄 6. License
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - visit the LICENSE file for details.
 Built for educational and benchmarking purposes during the Meta × Scaler Hackathon 2026.
