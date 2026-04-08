@@ -117,12 +117,18 @@ def grade(
             status_code=400,
             detail="No trajectory to grade. POST /reset first.",
         )
-    grader_map = {
-        "easy": grade_easy,
-        "medium": grade_medium,
-        "hard": grade_hard,
-    }
-    return grader_map[task](env.trajectory)
+    
+    # Use the trajectory from the environment state
+    trajectory = env.trajectory
+    
+    if task == "easy":
+        return grade_easy(trajectory)
+    elif task == "medium":
+        return grade_medium(trajectory)
+    elif task == "hard":
+        return grade_hard(trajectory)
+    else:
+        raise HTTPException(status_code=404, detail="Task not found")
 
 
 @app.get("/health")
@@ -135,8 +141,11 @@ def health() -> dict:
 def metadata() -> dict:
     """Return environment metadata."""
     return {
-        "name": "Autonomous FinOps Agent Environment",
-        "description": "RL environment for SaaS seat pruning and LLM API tier routing."
+        "tasks": [
+            {"id": "easy", "description": "Easy Task"},
+            {"id": "medium", "description": "Medium Task"},
+            {"id": "hard", "description": "Hard Task"}
+        ]
     }
 
 

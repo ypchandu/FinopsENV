@@ -6,15 +6,9 @@ action_schema: schemas.ActionEnvelope
 reward_type: continuous
 episode_length: 52
 tasks:
-  - id: easy
-    difficulty: easy
-    description: "Prune 100 inactive SaaS seats in a single action"
-  - id: medium
-    difficulty: medium
-    description: "Reroute LLM traffic tier while maintaining latency SLA"
-  - id: hard
-    difficulty: hard
-    description: "Survive a full 52-week fiscal year under budget"
+  - id: "easy"
+  - id: "medium"
+  - id: "hard"
 endpoints:
   reset: POST /reset
   step: POST /step
