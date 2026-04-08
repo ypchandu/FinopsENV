@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Inference client for the Autonomous FinOps Agent.
 
 Communicates with the FastAPI environment server over HTTP, uses an
