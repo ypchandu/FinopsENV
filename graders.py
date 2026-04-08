@@ -12,6 +12,11 @@ from schemas import (
 )
 
 BUDGET_TOLERANCE: float = 0.01
+MIN_SCORE: float = 0.001
+MAX_SCORE: float = 0.999
+
+def _clamp(score: float) -> float:
+    return max(MIN_SCORE, min(MAX_SCORE, float(score)))
 
 
 def grade_easy(trajectory: list[dict]) -> GraderResult:
@@ -21,7 +26,7 @@ def grade_easy(trajectory: list[dict]) -> GraderResult:
     if len(trajectory) < 2:
         breakdown["reason"] = "no step taken"
         return GraderResult(
-            task="easy", score=0.0, max_score=1.0,
+            task="easy", score=_clamp(0.0), max_score=1.0,
             breakdown=breakdown, trajectory_length=len(trajectory),
         )
 
@@ -32,7 +37,7 @@ def grade_easy(trajectory: list[dict]) -> GraderResult:
     if action_envelope is None:
         breakdown["reason"] = "action is None"
         return GraderResult(
-            task="easy", score=0.0, max_score=1.0,
+            task="easy", score=_clamp(0.0), max_score=1.0,
             breakdown=breakdown, trajectory_length=len(trajectory),
         )
 
@@ -53,7 +58,7 @@ def grade_easy(trajectory: list[dict]) -> GraderResult:
         score = 0.0
 
     return GraderResult(
-        task="easy", score=score, max_score=1.0,
+        task="easy", score=_clamp(score), max_score=1.0,
         breakdown=breakdown, trajectory_length=len(trajectory),
     )
 
@@ -69,7 +74,7 @@ def grade_medium(trajectory: list[dict]) -> GraderResult:
     if len(trajectory) < 2:
         breakdown["reason"] = "no step taken"
         return GraderResult(
-            task="medium", score=0.0, max_score=1.0,
+            task="medium", score=_clamp(0.0), max_score=1.0,
             breakdown=breakdown, trajectory_length=len(trajectory),
         )
 
@@ -98,7 +103,7 @@ def grade_medium(trajectory: list[dict]) -> GraderResult:
 
     score = score_a + score_b
     return GraderResult(
-        task="medium", score=min(score, 1.0), max_score=1.0,
+        task="medium", score=_clamp(score), max_score=1.0,
         breakdown=breakdown, trajectory_length=len(trajectory),
     )
 
@@ -113,7 +118,7 @@ def grade_hard(trajectory: list[dict]) -> GraderResult:
     if len(trajectory) < 2:
         breakdown["reason"] = "no steps taken"
         return GraderResult(
-            task="hard", score=0.0, max_score=1.0,
+            task="hard", score=_clamp(0.0), max_score=1.0,
             breakdown=breakdown, trajectory_length=len(trajectory),
         )
 
@@ -154,6 +159,6 @@ def grade_hard(trajectory: list[dict]) -> GraderResult:
     breakdown["final_week"] = final_week
 
     return GraderResult(
-        task="hard", score=score, max_score=1.0,
+        task="hard", score=_clamp(score), max_score=1.0,
         breakdown=breakdown, trajectory_length=len(trajectory),
     )
