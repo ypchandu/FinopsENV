@@ -9,8 +9,7 @@ GET  /grade   – Grade the current trajectory.           Returns GraderResult.
 """
 
 from __future__ import annotations
-
-from typing import Literal
+from typing import Literal, Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -58,9 +57,8 @@ env = FinOpsEnv()
 
 # ── Request schemas ──────────────────────────────────────────────────────────
 
-
 class ResetRequest(BaseModel):
-    task: Literal["easy", "medium", "hard"]
+    task: Literal["easy", "medium", "hard"] = "easy"
 
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
@@ -71,10 +69,11 @@ def root():
     return RedirectResponse(url="/docs")
 
 @app.post("/reset", response_model=Observation)
-def reset(payload: ResetRequest) -> Observation:
+def reset(payload: Optional[ResetRequest] = None) -> Observation:
     """Reset the environment to the starting state for a given task."""
     try:
-        obs: Observation = env.reset(payload.task)
+        task_name = payload.task if payload else "easy"
+        obs: Observation = env.reset(task_name)
         return obs
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
