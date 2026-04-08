@@ -1,0 +1,300 @@
+#!/usr/bin/env python3
+"""Inference client for the Autonomous FinOps Agent.
+
+Communicates with the FastAPI environment server over HTTP, uses an
+OpenAI-compatible LLM to decide actions, and prints Meta × Scaler hackathon
+log lines ([START] / [STEP] / [END]) to stdout.
+
+Environment variables
+---------------------
+API_BASE_URL   – Environment server root URL   (default: http://localhost:7860)
+MODEL_NAME     – LLM model identifier          (default: gpt-4o-mini)
+OPENAI_API_KEY – API key for the LLM provider  (required)
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import sys
+import time
+from typing import Any
+
+import requests
+from openai import OpenAI
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Configuration
+# ═══════════════════════════════════════════════════════════════════════════════
+
+API_BASE_URL: str = os.environ.get("API_BASE_URL", "http://localhost:7860").rstrip("/")
+MODEL_NAME: str = os.environ.get("MODEL_NAME", "gpt-4o-mini")
+OPENAI_API_KEY: str = os.environ.get("OPENAI_API_KEY", "")
+
+if not OPENAI_API_KEY:
+    print("ERROR: OPENAI_API_KEY environment variable is not set.", file=sys.stderr)
+    sys.exit(1)
+
+client = OpenAI(api_key=OPENAI_API_KEY)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Constants
+# ═══════════════════════════════════════════════════════════════════════════════
+
+ENV_NAME: str = "autonomous-finops-agent"
+MAX_RESET_RETRIES: int = 3
+RESET_RETRY_DELAY_S: float = 5.0
+
+SYSTEM_PROMPT: str = """You are an expert FinOps agent.  You manage SaaS seat
+allocations and LLM API tier routing to minimise costs while respecting
+latency SLAs.
+
+You MUST output **ONLY** valid JSON – no markdown fences, no explanation.
+The JSON must match one of these three action schemas (pick the best one):
+
+1. ModifySaaSSeats –
+   {"action_type":"ModifySaaSSeats","tool_name":"<name>","delta_seats":<int>,"justification":"<why>"}
+
+2. SwitchLLMRoutingTier –
+   {"action_type":"SwitchLLMRoutingTier","from_tier":"<name>","to_tier":"<name>","traffic_shift_pct":<0-100>,"justification":"<why>"}
+
+3. NoOp –
+   {"action_type":"NoOp","justification":"<why>"}
+
+Rules:
+- delta_seats is NEGATIVE to remove seats, POSITIVE to add.
+- traffic_shift_pct is 0–100 (percentage of requests to move).
+- Always provide a short justification string.
+- Output ONLY the JSON object.  Nothing else."""
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Helpers
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _reset_env(task: str) -> dict[str, Any]:
+    """POST /reset with retry logic for server boot lag."""
+    for attempt in range(1, MAX_RESET_RETRIES + 1):
+        try:
+            resp = requests.post(
+                f"{API_BASE_URL}/reset",
+                json={"task": task},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            return resp.json()
+        except (requests.ConnectionError, requests.Timeout) as exc:
+            if attempt < MAX_RESET_RETRIES:
+                print(
+                    f"  ⏳  /reset attempt {attempt}/{MAX_RESET_RETRIES} failed "
+                    f"({exc.__class__.__name__}), retrying in {RESET_RETRY_DELAY_S}s …",
+                    file=sys.stderr,
+                )
+                time.sleep(RESET_RETRY_DELAY_S)
+            else:
+                raise SystemExit(
+                    f"FATAL: Could not reach environment server after "
+                    f"{MAX_RESET_RETRIES} attempts."
+                ) from exc
+        except requests.HTTPError as exc:
+            raise SystemExit(f"FATAL: /reset returned {resp.status_code}: {resp.text}") from exc
+    # Unreachable, but keeps mypy happy
+    raise SystemExit("FATAL: /reset failed unexpectedly.")
+
+
+def _step_env(action_envelope: dict[str, Any]) -> dict[str, Any]:
+    """POST /step with the full ActionEnvelope."""
+    resp = requests.post(
+        f"{API_BASE_URL}/step",
+        json=action_envelope,
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def _grade(task: str) -> dict[str, Any]:
+    """GET /grade?task=<task>."""
+    resp = requests.get(
+        f"{API_BASE_URL}/grade",
+        params={"task": task},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def _format_observation(obs: dict[str, Any], task: str) -> str:
+    """Condense an Observation dict into a concise LLM prompt."""
+    budget = obs["budget"]
+    lines: list[str] = [
+        f"Task: {task} | Week {obs['week']}/52",
+        f"Budget: ${budget['remaining_budget_usd']:,.2f} remaining of "
+        f"${budget['annual_budget_usd']:,.2f}  |  "
+        f"Burn: ${budget['weekly_burn_rate_usd']:,.2f}/wk  |  "
+        f"Overrun projection: ${budget['projected_overrun_usd']:,.2f}",
+        f"Cumulative savings: ${obs['cumulative_savings_usd']:,.2f}  |  "
+        f"SLA breaches: {obs['active_sla_breaches']}",
+    ]
+
+    if obs.get("saas_tools"):
+        lines.append("── SaaS Tools ──")
+        for t in obs["saas_tools"]:
+            lines.append(
+                f"  {t['tool_name']}: {t['total_seats']} seats "
+                f"({t['active_seats']} active, {t['inactive_seats']} inactive) "
+                f"@ ${t['cost_per_seat_usd']}/seat → ${t['monthly_cost_usd']:,.2f}/mo"
+            )
+
+    if obs.get("llm_tiers"):
+        lines.append("── LLM Tiers ──")
+        for t in obs["llm_tiers"]:
+            lines.append(
+                f"  {t['tier_name']} ({t['model_id']}): "
+                f"{t['requests_this_week']:,} reqs/wk  |  "
+                f"${t['weekly_spend_usd']:,.2f}/wk  |  "
+                f"p95={t['p95_latency_ms']:.0f}ms  (SLA {t['sla_latency_threshold_ms']:.0f}ms)"
+            )
+
+    return "\n".join(lines)
+
+
+def _extract_json(text: str) -> dict[str, Any]:
+    """Extract the first JSON object from potentially noisy LLM output."""
+    # Try raw parse first
+    text = text.strip()
+    # Strip markdown code fences if present
+    text = re.sub(r"^```(?:json)?\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+    text = text.strip()
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # Fallback: find first { … } block
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group())
+        except json.JSONDecodeError:
+            pass
+
+    raise ValueError(f"Could not extract valid JSON from LLM response:\n{text[:300]}")
+
+
+def _ask_llm(observation: dict[str, Any], task: str) -> dict[str, Any]:
+    """Query the LLM and return the parsed action JSON."""
+    user_msg = (
+        _format_observation(observation, task)
+        + "\n\nChoose the single best action for this step. Output ONLY valid JSON."
+    )
+
+    response = client.chat.completions.create(
+        model=MODEL_NAME,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_msg},
+        ],
+        temperature=0.1,
+        max_tokens=256,
+    )
+
+    raw: str = response.choices[0].message.content or ""
+    return _extract_json(raw)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Main loop
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def run_episode(task: str) -> None:
+    """Run a full episode for the given task difficulty."""
+
+    # ── [START] ──────────────────────────────────────────────────────────────
+    print(f"[START] task={task} env={ENV_NAME} model={MODEL_NAME}")
+
+    observation: dict[str, Any] = _reset_env(task)
+    done: bool = observation.get("episode_done", False)
+    step_num: int = 0
+    rewards: list[float] = []
+
+    # ── Step loop ────────────────────────────────────────────────────────────
+    while not done:
+        step_num += 1
+        error_msg: str | None = None
+        action_type: str = "unknown"
+        reward: float = 0.0
+
+        try:
+            # 1. Ask LLM for an action
+            action_json = _ask_llm(observation, task)
+            action_type = action_json.get("action_type", "unknown")
+
+            # 2. Wrap in ActionEnvelope
+            envelope: dict[str, Any] = {"task": task, "action": action_json}
+
+            # 3. Step
+            step_result = _step_env(envelope)
+
+            reward = round(step_result["reward"], 2)
+            rewards.append(reward)
+            observation = step_result["observation"]
+            done = step_result["done"]
+
+        except (ValueError, requests.HTTPError, KeyError) as exc:
+            error_msg = str(exc)[:120]
+            # On error, fall back to NoOp so the episode can continue
+            try:
+                fallback: dict[str, Any] = {
+                    "task": task,
+                    "action": {
+                        "action_type": "NoOp",
+                        "justification": f"Fallback after error: {error_msg[:60]}",
+                    },
+                }
+                step_result = _step_env(fallback)
+                reward = round(step_result["reward"], 2)
+                rewards.append(reward)
+                observation = step_result["observation"]
+                done = step_result["done"]
+                action_type = "NoOp(fallback)"
+            except Exception:
+                # If even NoOp fails, the episode is dead
+                done = True
+
+        # ── [STEP] ───────────────────────────────────────────────────────────
+        print(
+            f"[STEP] step={step_num} action={action_type} "
+            f"reward={reward:.2f} done={done} error={error_msg}"
+        )
+
+    # ── [END] ────────────────────────────────────────────────────────────────
+    try:
+        grade_result = _grade(task)
+        score: float = grade_result.get("score", 0.0)
+    except Exception:
+        score = 0.0
+
+    reward_str: str = ",".join(f"{r:.2f}" for r in rewards)
+    success: bool = score > 0.0
+    print(
+        f"[END] success={success} steps={step_num} "
+        f"score={score} rewards={reward_str}"
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Entry point
+# ═══════════════════════════════════════════════════════════════════════════════
+
+if __name__ == "__main__":
+    task_arg: str = sys.argv[1] if len(sys.argv) > 1 else "easy"
+    if task_arg not in ("easy", "medium", "hard"):
+        print(f"Usage: python inference.py [easy|medium|hard]  (got '{task_arg}')", file=sys.stderr)
+        sys.exit(1)
+    run_episode(task_arg)

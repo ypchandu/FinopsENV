@@ -1,0 +1,21 @@
+name: autonomous-finops-agent
+version: "1.0.0"
+description: "FinOps agent for SaaS seat pruning and LLM API tier routing"
+observation_schema: schemas.Observation
+action_schema: schemas.ActionEnvelope
+reward_type: continuous
+episode_length: 52
+tasks:
+  - id: easy
+    difficulty: easy
+    description: "Prune 100 inactive SaaS seats in a single action"
+  - id: medium
+    difficulty: medium
+    description: "Reroute LLM traffic tier while maintaining latency SLA"
+  - id: hard
+    difficulty: hard
+    description: "Survive a full 52-week fiscal year under budget"
+endpoints:
+  reset: POST /reset
+  step: POST /step
+  state: GET /state
