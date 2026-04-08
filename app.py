@@ -15,6 +15,7 @@ from typing import Literal
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from fastapi.responses import RedirectResponse
 
 from schemas import ActionEnvelope, GraderResult, Observation, StepResult
 from environment import FinOpsEnv
@@ -22,10 +23,25 @@ from graders import grade_easy, grade_medium, grade_hard
 
 # ── App + CORS ───────────────────────────────────────────────────────────────
 
+# CUSTOM INSTRUCTION BOX FOR JUDGES
+instructions = """
+## 🛠️ How to Use the FinOps Environment
+This dashboard allows you to manually interact with the Autonomous FinOps Agent simulation.
+
+| Step | Action | Endpoint | Description |
+| :--- | :--- | :--- | :--- |
+| **1** | **Initialize** | `POST /reset` | Choose a task (**easy**, **medium**, **hard**) to start the 52-week simulation. |
+| **2** | **Execute** | `POST /step` | Submit an action (Prune Seats or Route Traffic). Each step advances time by 1 week. |
+| **3** | **Monitor** | `GET /state` | View current budget, SLA status, and SaaS telemetry without advancing time. |
+| **4** | **Evaluate** | `GET /grade` | Once the episode is done (Week 52 or Bankruptcy), get your final performance score. |
+
+---
+"""
+
 app = FastAPI(
     title="Autonomous FinOps Agent Environment",
     version="1.0.0",
-    description="RL environment for SaaS seat pruning and LLM API tier routing.",
+    description=instructions + "RL environment for SaaS seat pruning and LLM API tier routing.",
 )
 
 app.add_middleware(
@@ -49,6 +65,10 @@ class ResetRequest(BaseModel):
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
 
+@app.get("/", include_in_schema=False)
+def root():
+    """Redirects visitors to the interactive dashboard."""
+    return RedirectResponse(url="/docs")
 
 @app.post("/reset", response_model=Observation)
 def reset(payload: ResetRequest) -> Observation:
