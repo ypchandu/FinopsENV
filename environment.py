@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import copy
 import random
+import time
 from typing import Optional
 
 from schemas import (
@@ -172,7 +173,7 @@ class FinOpsEnv:
         ]
 
     def _init_hard(self) -> None:
-        self._rng = random.Random(42)
+        self._rng = random.Random(time.time())
         self.budget = BudgetState(
             fiscal_week=1,
             annual_budget_usd=1_200_000.0,
