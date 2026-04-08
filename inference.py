@@ -27,12 +27,20 @@ from openai import OpenAI
 # Configuration
 # ═══════════════════════════════════════════════════════════════════════════════
 
-API_BASE_URL = os.environ.get("API_BASE_URL", "https://omnip0tent-syntax-squad-finopsenv.hf.space").rstrip("/")
+# Catch the Grader's LiteLLM Proxy details (Injected dynamically)
+LLM_PROXY_URL = os.environ.get("API_BASE_URL")
+LLM_API_KEY = os.environ.get("API_KEY", os.environ.get("OPENAI_API_KEY", "dummy-eval-key"))
+
+# Define the local Docker environment URL for the simulation
+ENV_URL = os.environ.get("ENV_BASE_URL", "http://127.0.0.1:7860").rstrip("/")
+
 MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4o-mini")
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "dummy-eval-key")
 HF_TOKEN = os.environ.get("HF_TOKEN")
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+client = OpenAI(
+    base_url=LLM_PROXY_URL,
+    api_key=LLM_API_KEY
+)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Constants
@@ -75,7 +83,7 @@ def _reset_env(task: str) -> dict[str, Any]:
     for attempt in range(1, MAX_RESET_RETRIES + 1):
         try:
             resp = requests.post(
-                f"{API_BASE_URL}/reset",
+                f"{ENV_URL}/reset",
                 json={"task": task},
                 timeout=15,
             )
@@ -103,7 +111,7 @@ def _reset_env(task: str) -> dict[str, Any]:
 def _step_env(action_envelope: dict[str, Any]) -> dict[str, Any]:
     """POST /step with the full ActionEnvelope."""
     resp = requests.post(
-        f"{API_BASE_URL}/step",
+        f"{ENV_URL}/step",
         json=action_envelope,
         timeout=15,
     )
@@ -114,7 +122,7 @@ def _step_env(action_envelope: dict[str, Any]) -> dict[str, Any]:
 def _grade(task: str) -> dict[str, Any]:
     """GET /grade?task=<task>."""
     resp = requests.get(
-        f"{API_BASE_URL}/grade",
+        f"{ENV_URL}/grade",
         params={"task": task},
         timeout=15,
     )
