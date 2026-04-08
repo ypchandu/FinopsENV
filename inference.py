@@ -28,9 +28,12 @@ from openai import OpenAI
 # Configuration
 # ═══════════════════════════════════════════════════════════════════════════════
 
-API_BASE_URL: str = os.environ.get("API_BASE_URL", "http://localhost:7860").rstrip("/")
+API_BASE_URL: str = os.environ.get("API_BASE_URL", "https://omnip0tent-syntax-squad-finopsenv.hf.space").rstrip("/")
+#MODEL_NAME: str = os.environ.get("MODEL_NAME", "gpt-5.4-pro")
+OPENAI_API_KEY: str = os.environ.get("OPENAI_API_KEY", "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")
+#API_BASE_URL: str = os.environ.get("API_BASE_URL", "http://localhost:7860").rstrip("/")
 MODEL_NAME: str = os.environ.get("MODEL_NAME", "gpt-4o-mini")
-OPENAI_API_KEY: str = os.environ.get("OPENAI_API_KEY", "")
+#OPENAI_API_KEY: str = os.environ.get("OPENAI_API_KEY", "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")
 
 if not OPENAI_API_KEY:
     print("ERROR: OPENAI_API_KEY environment variable is not set.", file=sys.stderr)
