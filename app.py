@@ -104,3 +104,38 @@ def grade(
         "hard": grade_hard,
     }
     return grader_map[task](env.trajectory)
+
+
+@app.get("/health")
+def health() -> dict:
+    """Return environment health status."""
+    return {"status": "healthy"}
+
+
+@app.get("/metadata")
+def metadata() -> dict:
+    """Return environment metadata."""
+    return {
+        "name": "Autonomous FinOps Agent Environment",
+        "description": "RL environment for SaaS seat pruning and LLM API tier routing."
+    }
+
+
+@app.get("/schema")
+def schema() -> dict:
+    """Return JSON schemas for action, observation, and state."""
+    return {
+        "action": ActionEnvelope.model_json_schema(),
+        "observation": Observation.model_json_schema(),
+        "state": Observation.model_json_schema(),
+    }
+
+
+@app.post("/mcp")
+def mcp(payload: dict) -> dict:
+    """Model Context Protocol endpoint."""
+    return {
+        "jsonrpc": "2.0",
+        "id": payload.get("id"),
+        "result": {}
+    }
