@@ -60,6 +60,10 @@ env = FinOpsEnv()
 class ResetRequest(BaseModel):
     task: Literal["easy", "medium", "hard"] = "easy"
 
+class GradeRequest(BaseModel):
+    task: Literal["easy", "medium", "hard"]
+    trajectory: list[dict]
+
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
 
@@ -129,6 +133,20 @@ def grade(
         return grade_hard(trajectory)
     else:
         raise HTTPException(status_code=404, detail="Task not found")
+
+@app.post("/grade", response_model=GraderResult)
+def grade_post(payload: GradeRequest) -> GraderResult:
+    """Automated Grader hook for Phase 2 Task Validation tests."""
+    traj = payload.trajectory
+
+    if payload.task == "easy":
+        return grade_easy(traj)
+    elif payload.task == "medium":
+        return grade_medium(traj)
+    elif payload.task == "hard":
+        return grade_hard(traj)
+    else:
+        raise HTTPException(status_code=404, detail=f"Task '{payload.task}' not found")
 
 
 @app.get("/health")
