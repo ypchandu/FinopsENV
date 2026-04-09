@@ -137,14 +137,29 @@ def grade(
 @app.post("/grade", response_model=GraderResult)
 def grade_post(payload: GradeRequest) -> GraderResult:
     """Automated Grader hook for Phase 2 Task Validation tests."""
-    traj = payload.trajectory
+    raw_traj = payload.trajectory
+    parsed_traj = []
+
+    for entry in raw_traj:
+        # Clone the entry to avoid side effects
+        parsed_entry = entry.copy()
+        
+        # Convert dictionary observation back into a Pydantic object
+        if "observation" in entry and isinstance(entry["observation"], dict):
+            parsed_entry["observation"] = Observation.model_validate(entry["observation"])
+            
+        # Convert dictionary action envelope back into a Pydantic object
+        if "action" in entry and isinstance(entry["action"], dict):
+            parsed_entry["action"] = ActionEnvelope.model_validate(entry["action"])
+            
+        parsed_traj.append(parsed_entry)
 
     if payload.task == "easy":
-        return grade_easy(traj)
+        return grade_easy(parsed_traj)
     elif payload.task == "medium":
-        return grade_medium(traj)
+        return grade_medium(parsed_traj)
     elif payload.task == "hard":
-        return grade_hard(traj)
+        return grade_hard(parsed_traj)
     else:
         raise HTTPException(status_code=404, detail=f"Task '{payload.task}' not found")
 
