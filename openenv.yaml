@@ -1,16 +1,15 @@
 name: autonomous-finops-agent
-version: "1.0.0"
+
 description: "FinOps agent for SaaS seat pruning and LLM API tier routing"
-observation_schema: schemas.Observation
-action_schema: schemas.ActionEnvelope
-reward_type: continuous
-episode_length: 52
+
+version: "1.0"
+
+entry_point: server.app:app
+
 tasks:
-  - id: "easy"
-  - id: "medium"
-  - id: "hard"
-endpoints:
-  reset: POST /reset
-  step: POST /step
-  state: GET /state
-  grade: POST /grade
+  - id: easy
+    grader: graders:grade_easy
+  - id: medium
+    grader: graders:grade_medium
+  - id: hard
+    grader: graders:grade_hard

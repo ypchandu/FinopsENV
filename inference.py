@@ -27,19 +27,23 @@ from openai import OpenAI
 # Configuration
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Catch the Grader's LiteLLM Proxy details (Injected dynamically)
-LLM_PROXY_URL = os.environ.get("API_BASE_URL")
-LLM_API_KEY = os.environ.get("API_KEY", os.environ.get("OPENAI_API_KEY", "dummy-eval-key"))
+IMAGE_NAME = os.getenv("IMAGE_NAME")  # If using docker image
+API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY") or os.getenv("OPENAI_API_KEY") or "dummy-eval-key"
+
+API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
+MODEL_NAME = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
+TASK_NAME = os.getenv("TASK_NAME", "easy")
+BENCHMARK = os.getenv("BENCHMARK", "autonomous-finops-agent")
 
 # Define the local Docker environment URL for the simulation
-ENV_URL = os.environ.get("ENV_BASE_URL", "http://127.0.0.1:7860").rstrip("/")
+ENV_URL = os.getenv("ENV_BASE_URL", "http://127.0.0.1:7860").rstrip("/")
 
-MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4o-mini")
-HF_TOKEN = os.environ.get("HF_TOKEN")
+# Task IDs the evaluator will iterate over
+task_ids = ["easy", "medium", "hard"]
 
 client = OpenAI(
-    base_url=LLM_PROXY_URL,
-    api_key=LLM_API_KEY
+    base_url=API_BASE_URL,
+    api_key=API_KEY
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -303,13 +307,16 @@ def run_episode(task: str) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    task_arg: str = sys.argv[1] if len(sys.argv) > 1 else "easy"
-    if task_arg not in ("easy", "medium", "hard"):
-        print(f"Usage: python inference.py [easy|medium|hard]  (got '{task_arg}')", file=sys.stderr)
-        sys.exit(0)  # Changed from 1 to 0 for evaluator safety
+    task_arg: str = sys.argv[1] if len(sys.argv) > 1 else ""
 
     try:
-        run_episode(task_arg)
+        if task_arg in ("easy", "medium", "hard"):
+            # Single task mode
+            run_episode(task_arg)
+        else:
+            # Run ALL tasks for the evaluator
+            for tid in task_ids:
+                run_episode(tid)
     except BaseException as e:
         print(f"FATAL UNHANDLED ERROR: {e}", file=sys.stderr)
         sys.exit(0)  # Guarantee a clean exit for the grading pipeline
