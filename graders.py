@@ -3,7 +3,7 @@ from schemas import GraderResult
 
 BUDGET_TOLERANCE: float = 0.01
 MIN_SCORE = 0.001
-MAX_SCORE = 0.999
+MAX_SCORE = 0.998
 
 def grade_easy(trajectory: list[dict]) -> GraderResult:
     breakdown: dict = {}

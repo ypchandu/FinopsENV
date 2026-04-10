@@ -315,8 +315,8 @@ def run_episode(task: str) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    # Prioritize: 1. Argument, 2. Environment Variable
-    task_arg: str = sys.argv[1] if len(sys.argv) > 1 else os.getenv("TASK_NAME", "")
+    # Prioritize: 1. Environment Variable, 2. Argument
+    task_arg: str = os.getenv("TASK_NAME") or (sys.argv[1] if len(sys.argv) > 1 else "")
 
     try:
         if task_arg in ("easy", "medium", "hard"):

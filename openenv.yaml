@@ -13,3 +13,7 @@ tasks:
     grader: graders:grade_medium
   - id: hard
     grader: graders:grade_hard
+
+endpoints:
+  state: GET /state
+  grade: POST /grade
