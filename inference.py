@@ -315,19 +315,17 @@ def run_episode(task: str) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    task_arg: str = sys.argv[1] if len(sys.argv) > 1 else ""
+    # Prioritize: 1. Argument, 2. Environment Variable
+    task_arg: str = sys.argv[1] if len(sys.argv) > 1 else os.getenv("TASK_NAME", "")
 
     try:
         if task_arg in ("easy", "medium", "hard"):
             # Single task mode
             run_episode(task_arg)
         else:
-            # Run ALL tasks for the evaluator
+            # Run ALL tasks if no specific task is requested
             for tid in task_ids:
                 run_episode(tid)
-    except ValueError as e:
-        print(f"FATAL VALIDATION ERROR: {e}", file=sys.stderr)
-        sys.exit(0)
     except BaseException as e:
         print(f"FATAL UNHANDLED ERROR: {e}", file=sys.stderr)
         sys.exit(0)  # Guarantee a clean exit for the grading pipeline
