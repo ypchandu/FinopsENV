@@ -84,7 +84,7 @@ class StepResult(BaseModel):
 
 class GraderResult(BaseModel):
     task: Literal["easy", "medium", "hard"]
-    score: float = Field(..., gt=0.0, lt=1.0)
+    score: float = Field(..., gt=0.0, lt=0.98)
     max_score: float = 1.0
     breakdown: dict
     trajectory_length: int
