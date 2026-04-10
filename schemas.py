@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Literal, Optional, Union
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class SaaSToolStats(BaseModel):
@@ -84,7 +84,16 @@ class StepResult(BaseModel):
 
 class GraderResult(BaseModel):
     task: Literal["easy", "medium", "hard"]
-    score: float = Field(..., gt=0.0, lt=1.0)
+    score: float
     max_score: float = 1.0
     breakdown: dict
     trajectory_length: int
+
+    @field_validator("score")
+    @classmethod
+    def validate_score_range(cls, v: float) -> float:
+        """Strictly enforce that the score is between 0 and 1 (exclusive)."""
+        if not (0.0 < v < 1.0):
+            # If the logic somehow failed, we clamp it here as a final safety net
+            return max(0.010, min(0.990, v))
+        return v
