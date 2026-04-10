@@ -181,8 +181,6 @@ def health() -> dict:
 def metadata() -> dict:
     """Return environment metadata."""
     return {
-        "name": "Syntax Squad FinOps Agent Environment",
-        "description": "Enterprise software waste optimization simulation (SaaS seats and LLM routing).",
         "tasks": [
             {"id": "easy", "name": "Easy Task", "description": "Easy Task"},
             {"id": "medium", "name": "Medium Task", "description": "Medium Task"},

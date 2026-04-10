@@ -28,11 +28,10 @@ from openai import OpenAI
 # ═══════════════════════════════════════════════════════════════════════════════
 
 IMAGE_NAME = os.getenv("IMAGE_NAME")  # If using docker image
+API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY") or os.getenv("OPENAI_API_KEY") or "dummy-eval-key"
 
-HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("API_KEY") or os.getenv("OPENAI_API_KEY") or "dummy-eval-key"
-
-API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
+API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
+MODEL_NAME = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
 TASK_NAME = os.getenv("TASK_NAME", "easy")
 BENCHMARK = os.getenv("BENCHMARK", "autonomous-finops-agent")
 
@@ -44,7 +43,7 @@ task_ids = ["easy", "medium", "hard"]
 
 client = OpenAI(
     base_url=API_BASE_URL,
-    api_key=HF_TOKEN
+    api_key=API_KEY
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -184,8 +183,8 @@ def _extract_json(text: str) -> dict[str, Any]:
     except json.JSONDecodeError:
         pass
 
-    # Fallback: find FIRST complete { … } block (non-greedy)
-    match = re.search(r"\{.*?\}", text, re.DOTALL)
+    # Fallback: find first { … } block
+    match = re.search(r"\{.*\}", text, re.DOTALL)
     if match:
         try:
             return json.loads(match.group())
@@ -209,7 +208,7 @@ def _ask_llm(observation: dict[str, Any], task: str) -> dict[str, Any]:
             {"role": "user", "content": user_msg},
         ],
         temperature=0.1,
-        max_tokens=1024,  # Raised from 256
+        max_tokens=256,
     )
 
     raw: str = response.choices[0].message.content or ""
@@ -277,19 +276,15 @@ def run_episode(task: str) -> None:
                 done = step_result["done"]
                 action_type = "NoOp(fallback)"
             except Exception:
-                # Tier-2: server is unreachable — advance the offline counter.
-                time.sleep(1.0)
+                # If even NoOp fails, keep the episode alive until week 52
                 done = step_num >= 52
                 action_type = "NoOp(offline)"
                 reward = 0.0
 
-        # ── [STEP] display transforms (stdout only — internal state unchanged) ──
-        done_display: str = "true" if done else "false"
-        error_display: str = "null" if error_msg is None else error_msg
-        
+        # ── [STEP] ───────────────────────────────────────────────────────────
         print(
             f"[STEP] step={step_num} action={action_type} "
-            f"reward={reward:.2f} done={done_display} error={error_display}", flush=True
+            f"reward={reward:.2f} done={done} error={error_msg}"
         )
 
     # ── [END] ────────────────────────────────────────────────────────────────
@@ -298,13 +293,12 @@ def run_episode(task: str) -> None:
         score: float = grade_result.get("score", 0.0)
     except Exception:
         score = 0.5
-        
+
     reward_str: str = ",".join(f"{r:.2f}" for r in rewards)
     success: bool = score > 0.0
-    success_display: str = "true" if success else "false"
-    
     print(
-        f"[END] success={success_display} steps={step_num} rewards={reward_str}", flush=True
+        f"[END] success={success} steps={step_num} "
+        f"score={score} rewards={reward_str}"
     )
 
 
@@ -313,15 +307,14 @@ def run_episode(task: str) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    # Prioritize: 1. Environment Variable, 2. Argument
-    task_arg: str = os.getenv("TASK_NAME") or (sys.argv[1] if len(sys.argv) > 1 else "")
+    task_arg: str = sys.argv[1] if len(sys.argv) > 1 else ""
 
     try:
         if task_arg in ("easy", "medium", "hard"):
             # Single task mode
             run_episode(task_arg)
         else:
-            # Run ALL tasks if no specific task is requested
+            # Run ALL tasks for the evaluator
             for tid in task_ids:
                 run_episode(tid)
     except BaseException as e:
