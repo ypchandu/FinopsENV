@@ -2,18 +2,14 @@ from __future__ import annotations
 from schemas import GraderResult
 
 BUDGET_TOLERANCE: float = 0.01
-MIN_SCORE = 0.010
-MAX_SCORE = 0.990
-
-def _clamp(score: float) -> float:
-    """Explicitly force the score to be strictly inside (0, 1) with a margin."""
-    return max(MIN_SCORE, min(MAX_SCORE, float(score)))
+MIN_SCORE = 0.001
+MAX_SCORE = 0.999
 
 def grade_easy(trajectory: list[dict]) -> GraderResult:
     breakdown: dict = {}
     if len(trajectory) < 2:
         breakdown["reason"] = "no step taken"
-        return GraderResult(task="easy", score=_clamp(MIN_SCORE), max_score=1.0, breakdown=breakdown, trajectory_length=len(trajectory))
+        return GraderResult(task="easy", score=MIN_SCORE, max_score=1.0, breakdown=breakdown, trajectory_length=len(trajectory))
 
     step1 = trajectory[1]
     
@@ -27,7 +23,7 @@ def grade_easy(trajectory: list[dict]) -> GraderResult:
 
     if not act:
         breakdown["reason"] = "action is None"
-        return GraderResult(task="easy", score=_clamp(MIN_SCORE), max_score=1.0, breakdown=breakdown, trajectory_length=len(trajectory))
+        return GraderResult(task="easy", score=MIN_SCORE, max_score=1.0, breakdown=breakdown, trajectory_length=len(trajectory))
 
     act_dict = act if isinstance(act, dict) else vars(act)
 
@@ -43,10 +39,9 @@ def grade_easy(trajectory: list[dict]) -> GraderResult:
     breakdown["positive_reward"] = positive_reward
 
     score = MAX_SCORE if (correct_type and correct_tool and correct_delta and positive_reward) else MIN_SCORE
-    final_score = _clamp(score)
 
     return GraderResult(
-        task="easy", score=final_score, max_score=1.0,
+        task="easy", score=score, max_score=1.0,
         breakdown=breakdown, trajectory_length=len(trajectory)
     )
 
@@ -58,7 +53,7 @@ def grade_medium(trajectory: list[dict]) -> GraderResult:
 
     if len(trajectory) < 2:
         breakdown["reason"] = "no step taken"
-        return GraderResult(task="medium", score=_clamp(MIN_SCORE), max_score=1.0, breakdown=breakdown, trajectory_length=len(trajectory))
+        return GraderResult(task="medium", score=MIN_SCORE, max_score=1.0, breakdown=breakdown, trajectory_length=len(trajectory))
 
     step1 = trajectory[1]
     
@@ -91,7 +86,7 @@ def grade_medium(trajectory: list[dict]) -> GraderResult:
     breakdown["score_b_sla"] = score_b
 
     raw_score = score_a + score_b
-    final_score = _clamp(raw_score)
+    final_score = max(MIN_SCORE, min(MAX_SCORE, raw_score))
 
     return GraderResult(
         task="medium", score=final_score, max_score=1.0,
@@ -108,7 +103,7 @@ def grade_hard(trajectory: list[dict]) -> GraderResult:
 
     if len(trajectory) < 2:
         breakdown["reason"] = "no steps taken"
-        return GraderResult(task="hard", score=_clamp(MIN_SCORE), max_score=1.0, breakdown=breakdown, trajectory_length=len(trajectory))
+        return GraderResult(task="hard", score=MIN_SCORE, max_score=1.0, breakdown=breakdown, trajectory_length=len(trajectory))
 
     # Resilient obs extraction
     last_step = trajectory[-1]
@@ -148,7 +143,8 @@ def grade_hard(trajectory: list[dict]) -> GraderResult:
         c3 = (final_week / 52.0) * 0.5
 
     score = (c1 * 0.5) + (c2 * 0.3) + (c3 * 0.2)
-    final_score = _clamp(score)
+    score = round(score, 4)
+    final_score = max(MIN_SCORE, min(MAX_SCORE, score))
 
     breakdown["c1_savings"] = round(c1, 4)
     breakdown["c2_sla"] = round(c2, 4)
