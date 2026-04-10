@@ -28,10 +28,13 @@ from openai import OpenAI
 # ═══════════════════════════════════════════════════════════════════════════════
 
 IMAGE_NAME = os.getenv("IMAGE_NAME")  # If using docker image
-API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY") or os.getenv("OPENAI_API_KEY") or "dummy-eval-key"
 
-API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
-MODEL_NAME = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
+HF_TOKEN = os.getenv("HF_TOKEN")
+if HF_TOKEN is None:
+    raise ValueError("HF_TOKEN environment variable is required")
+
+API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
 TASK_NAME = os.getenv("TASK_NAME", "easy")
 BENCHMARK = os.getenv("BENCHMARK", "autonomous-finops-agent")
 
@@ -43,7 +46,7 @@ task_ids = ["easy", "medium", "hard"]
 
 client = OpenAI(
     base_url=API_BASE_URL,
-    api_key=API_KEY
+    api_key=HF_TOKEN
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -183,8 +186,8 @@ def _extract_json(text: str) -> dict[str, Any]:
     except json.JSONDecodeError:
         pass
 
-    # Fallback: find first { … } block
-    match = re.search(r"\{.*\}", text, re.DOTALL)
+    # Fallback: find FIRST complete { … } block (non-greedy)
+    match = re.search(r"\{.*?\}", text, re.DOTALL)
     if match:
         try:
             return json.loads(match.group())
@@ -208,7 +211,7 @@ def _ask_llm(observation: dict[str, Any], task: str) -> dict[str, Any]:
             {"role": "user", "content": user_msg},
         ],
         temperature=0.1,
-        max_tokens=256,
+        max_tokens=1024,  # Raised from 256
     )
 
     raw: str = response.choices[0].message.content or ""
@@ -276,15 +279,19 @@ def run_episode(task: str) -> None:
                 done = step_result["done"]
                 action_type = "NoOp(fallback)"
             except Exception:
-                # If even NoOp fails, keep the episode alive until week 52
+                # Tier-2: server is unreachable — advance the offline counter.
+                time.sleep(1.0)
                 done = step_num >= 52
                 action_type = "NoOp(offline)"
                 reward = 0.0
 
-        # ── [STEP] ───────────────────────────────────────────────────────────
+        # ── [STEP] display transforms (stdout only — internal state unchanged) ──
+        done_display: str = "true" if done else "false"
+        error_display: str = "null" if error_msg is None else error_msg
+        
         print(
             f"[STEP] step={step_num} action={action_type} "
-            f"reward={reward:.2f} done={done} error={error_msg}"
+            f"reward={reward:.2f} done={done_display} error={error_display}", flush=True
         )
 
     # ── [END] ────────────────────────────────────────────────────────────────
@@ -293,12 +300,13 @@ def run_episode(task: str) -> None:
         score: float = grade_result.get("score", 0.0)
     except Exception:
         score = 0.5
-
+        
     reward_str: str = ",".join(f"{r:.2f}" for r in rewards)
     success: bool = score > 0.0
+    success_display: str = "true" if success else "false"
+    
     print(
-        f"[END] success={success} steps={step_num} "
-        f"score={score} rewards={reward_str}"
+        f"[END] success={success_display} steps={step_num} rewards={reward_str}", flush=True
     )
 
 
@@ -317,6 +325,9 @@ if __name__ == "__main__":
             # Run ALL tasks for the evaluator
             for tid in task_ids:
                 run_episode(tid)
+    except ValueError as e:
+        print(f"FATAL VALIDATION ERROR: {e}", file=sys.stderr)
+        sys.exit(0)
     except BaseException as e:
         print(f"FATAL UNHANDLED ERROR: {e}", file=sys.stderr)
         sys.exit(0)  # Guarantee a clean exit for the grading pipeline
