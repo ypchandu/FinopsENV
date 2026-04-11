@@ -55,8 +55,8 @@ ENV_NAME: str = "autonomous-finops-agent"
 MAX_RESET_RETRIES: int = 3
 RESET_RETRY_DELAY_S: float = 5.0
 
-SYSTEM_PROMPT: str = """You are an expert FinOps agent.  You manage SaaS seat
-allocations and LLM API tier routing to minimise costs while respecting
+SYSTEM_PROMPT: str = """You are an expert FinOps agent. You manage SaaS seat
+allocations and LLM API tier routing to minimise costs while strictly respecting
 latency SLAs.
 
 You MUST output **ONLY** valid JSON – no markdown fences, no explanation.
@@ -71,11 +71,11 @@ The JSON must match one of these three action schemas (pick the best one):
 3. NoOp –
    {"action_type":"NoOp","justification":"<why>"}
 
-Rules:
-- delta_seats is NEGATIVE to remove seats, POSITIVE to add.
-- traffic_shift_pct is 0–100 (percentage of requests to move).
-- Always provide a short justification string.
-- Output ONLY the JSON object.  Nothing else."""
+CRITICAL BUSINESS RULES (PENALTIES APPLY):
+- SAAS SEATS: FIRING ACTIVE SEATS IS FATAL (-$150 penalty). If `inactive_seats` > 0, set `delta_seats` to a NEGATIVE number exactly matching the `inactive_seats`. DO NOT remove seats if `inactive_seats` is 0. 
+- LLM ROUTING: BREACHING SLA IS FATAL (-$75 penalty). Only shift traffic to a cheaper tier if its `p95_latency_ms` is safely below the `sla_latency_threshold_ms`. Shift in smaller increments (e.g., 20) to avoid suddenly breaking the SLA.
+- NO-OP IS VALUABLE: If no inactive seats exist to prune, and LLM latency SLAs are tight, your absolute BEST action is `NoOp` to safely protect your budget for the week.
+- Output ONLY the JSON object. Nothing else."""
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
