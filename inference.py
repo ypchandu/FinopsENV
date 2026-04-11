@@ -229,7 +229,6 @@ def run_episode(task: str) -> None:
 
     # ── HF_TOKEN validation ───────────────────────────────────────────────────
     # Raised after [START] so the grading pipeline log anchor exists in stdout.
-    # Propagates to __main__ which catches ValueError and exits cleanly.
     if not API_KEY:
         raise ValueError(
             "HF_TOKEN environment variable is not set. "
@@ -328,8 +327,7 @@ if __name__ == "__main__":
             for tid in task_ids:
                 run_episode(tid)
     except ValueError as e:
-        # HF_TOKEN missing — [START] already emitted; stderr only so the
-        # grading pipeline regex parser sees no spurious stdout pollution.
+        # HF_TOKEN missing — [START] already emitted; stderr only, clean exit.
         print(f"FATAL VALIDATION ERROR: {e}", file=sys.stderr)
         sys.exit(0)
     except BaseException as e:
