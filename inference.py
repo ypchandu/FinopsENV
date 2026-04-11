@@ -291,9 +291,11 @@ def run_episode(task: str) -> None:
                 reward = 0.0
 
         # ── [STEP] ───────────────────────────────────────────────────────────
+        done_display = "true" if done else "false"
+        error_display = "null" if error_msg is None else error_msg
         print(
             f"[STEP] step={step_num} action={action_type} "
-            f"reward={reward:.2f} done={done} error={error_msg}"
+            f"reward={reward:.2f} done={done_display} error={error_display}"
         )
 
     # ── [END] ────────────────────────────────────────────────────────────────
@@ -305,8 +307,9 @@ def run_episode(task: str) -> None:
 
     reward_str: str = ",".join(f"{r:.2f}" for r in rewards)
     success: bool = score > 0.0
+    success_display = "true" if success else "false"
     print(
-        f"[END] success={success} steps={step_num} "
+        f"[END] success={success_display} steps={step_num} "
         f"score={score} rewards={reward_str}"
     )
 
