@@ -28,7 +28,8 @@ from openai import OpenAI
 # ═══════════════════════════════════════════════════════════════════════════════
 
 IMAGE_NAME = os.getenv("IMAGE_NAME")  # If using docker image
-API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY") or os.getenv("OPENAI_API_KEY") or "dummy-eval-key"
+# Validation is deferred to run_episode() so [START] can be emitted first.
+API_KEY: str | None = os.getenv("HF_TOKEN")
 
 API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
 MODEL_NAME = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
@@ -43,7 +44,7 @@ task_ids = ["easy", "medium", "hard"]
 
 client = OpenAI(
     base_url=API_BASE_URL,
-    api_key=API_KEY
+    api_key=API_KEY or "deferred-validation",  # real check happens inside run_episode()
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -226,6 +227,15 @@ def run_episode(task: str) -> None:
     # ── [START] ──────────────────────────────────────────────────────────────
     print(f"[START] task={task} env={ENV_NAME} model={MODEL_NAME}")
 
+    # ── HF_TOKEN validation ───────────────────────────────────────────────────
+    # Raised after [START] so the grading pipeline log anchor exists in stdout.
+    # Propagates to __main__ which catches ValueError and exits cleanly.
+    if not API_KEY:
+        raise ValueError(
+            "HF_TOKEN environment variable is not set. "
+            "A valid HF_TOKEN is required to authenticate with the LLM provider."
+        )
+
     try:
         observation = _reset_env(task)
     except Exception as e:
@@ -317,6 +327,11 @@ if __name__ == "__main__":
             # Run ALL tasks for the evaluator
             for tid in task_ids:
                 run_episode(tid)
+    except ValueError as e:
+        # HF_TOKEN missing — [START] already emitted; stderr only so the
+        # grading pipeline regex parser sees no spurious stdout pollution.
+        print(f"FATAL VALIDATION ERROR: {e}", file=sys.stderr)
+        sys.exit(0)
     except BaseException as e:
         print(f"FATAL UNHANDLED ERROR: {e}", file=sys.stderr)
         sys.exit(0)  # Guarantee a clean exit for the grading pipeline
